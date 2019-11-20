@@ -1,0 +1,131 @@
+#SSH SERVER CONFIGURATION
+
+#INSTALACION DE SSH 
+FROM centos/systemd:latest
+MAINTAINER <Rafael Ordoñez Suarez>
+LABEL Vendor="CentOS"
+
+#ACTUALIZACION REPOSITORIO
+RUN yum update -y;yum install openssh* -y;yum install vim -y;yum install initscripts -y;
+
+#ENCIENDE EL SISTEMA
+RUN service sshd restart
+#SALIR POR EL PUERTO 22
+EXPOSE 22
+
+#EMPAREJAR LOS VOLUMENES
+VOLUME ["/data"]
+COPY . /data
+
+#DAR PERMISOS
+RUN chmod +x /data/red.sh
+WORKDIR /root
+USER root
+ENTRYPOINT //data/red.sh && /bin/bash 
+
+
+
+
+
+
+
+
+
+
+#HTTP SERVER CONFIGURATION
+
+#INSTALAR HTTP 
+#Y ACTIVAR EL SERVICIO HTTP
+
+RUN yum -y install httpd; systemctl enable httpd.service
+
+#SACAR EL SERVICIO POR EL PUERTO 80
+EXPOSE 80
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#FTP SERVER CONFIGURATION
+
+#INSTALACION DE FTP
+RUN yum install -y --no-install-recommends vsftpd db-util &&;
+    yum clean
+
+#ASIGNAR USUARIO Y CONTRASEÑA
+ENV FTP_USER admin
+ENV FTP_PASS admin
+ENV PASV_ADDRESS REQUIRED
+
+#EMPAREJAR ARCHIVOS
+COPY vsftpd.conf /etc/vsftpd/
+COPY vsftpd_virtual /etc/pam.d/
+COPY run-vsftpd.sh /usr/sbin/
+
+#DAR PERMISOS
+RUN chmod +x /usr/sbin/run-vsftpd.sh && \
+		mkdir -p /var/run/vsftpd/empty
+
+#DEFINIR LOS VOLUMENES
+VOLUME /home/vsftpd
+VOLUME /var/log/vsftpd
+
+#EXPONER SERVICIOS
+EXPOSE 20 21
+
+#INICIAR SERVICIO
+CMD ["/usr/sbin/run-vsftpd.sh"]
+
+
+
+
+
+
+
+
+
+
+
+#MARIADB SERVER CONFIGURATION
+
+
+#INSTALARLO DESDE OTRA MAQUINA (OBVIALO)
+LABEL Build docker build --rm --tag centos/mariadb55 .
+
+#INSTALAR REPOS 
+RUN yum -y install --setopt=tsflags=nodocs epel-release && \ 
+    yum -y install --setopt=tsflags=nodocs mariadb-server bind-utils pwgen psmisc hostname && \ 
+    yum -y erase vim-minimal && \
+    yum -y update && yum clean all
+
+
+# ARREGLAR PERMISOS 
+COPY fix-permissions.sh ./
+RUN ./fix-permissions.sh /var/lib/mysql/   && \
+    ./fix-permissions.sh /var/log/mariadb/ && \
+    ./fix-permissions.sh /var/run/
+
+COPY docker-entrypoint.sh /
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
+# Place VOLUME statement below all changes to /var/lib/mysql
+VOLUME /var/lib/mysql
+
+# By default will run as random user on openshift and the mysql user (27)
+# everywhere else
+USER 27
+
+EXPOSE 3306
+CMD ["mysqld_safe"]
